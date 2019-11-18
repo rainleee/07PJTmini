@@ -1,16 +1,23 @@
 package com.model2.mvc.web.product;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
 import java.util.Map;
+import java.util.StringTokenizer;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
+import org.apache.commons.fileupload.DiskFileUpload;
+import org.apache.commons.fileupload.FileItem;
+import org.apache.commons.fileupload.FileUpload;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -20,6 +27,7 @@ import com.model2.mvc.common.Page;
 import com.model2.mvc.common.Search;
 import com.model2.mvc.service.domain.Product;
 import com.model2.mvc.service.product.ProductService;
+import com.model2.mvc.service.product.impl.ProductServiceImpl;
 
 
 //==> 회원관리 Controller
@@ -61,11 +69,87 @@ public class ProductController {
 //	@RequestMapping("/addProduct.do")
 //	public String addProduct( @ModelAttribute("product") Product product) throws Exception {
 	@RequestMapping(value = "addProduct", method = RequestMethod.POST)
-	public String addProduct( @ModelAttribute("product") Product product) throws Exception {
-
+	public String addProduct( @ModelAttribute("product") Product product,
+								HttpServletRequest request,
+								HttpServletResponse response,
+								Model model) throws Exception {
+		
+		if(FileUpload.isMultipartContent(request)) {
+			String temDir = "C:\\Users\\user\\git\\repository\\07PJTmini\\07.Model2MVCShop(URI,pattern)\\WebContent\\images\\uploadFiles";
+			
+			DiskFileUpload fileUpload = new DiskFileUpload();
+			fileUpload.setRepositoryPath(temDir);
+			fileUpload.setSizeMax(1024*1024*50);
+			//gksqjsdp 100k까지는 메모리에 저장
+			fileUpload.setSizeThreshold(1024*100);
+			
+			if(request.getContentLength() < fileUpload.getSizeMax()) {
+//				Product productImage = new Product();
+				
+				StringTokenizer token = null; 
+				
+				List fileItemList = fileUpload.parseRequest(request);
+				int Size = fileItemList.size();
+				for (int i = 0; i < Size; i++) {
+					FileItem fileItem = (FileItem)fileItemList.get(i);
+					//isFormField()를 통해서 파일형식인지 파라미터인지 구분한다.
+					//파라미터라면 true
+					if(fileItem.isFormField()) {
+						if (fileItem.getFieldName().equals("manuDate")) {
+							token = new StringTokenizer(fileItem.getString("euc-kr"),"-" );
+							String manuDate = token.nextToken() + token.nextToken() + 
+									token.nextToken();
+							product.setManuDate(manuDate);
+						}
+						else if(fileItem.getFieldName().equals("prodName")) 
+							product.setProdName(fileItem.getString("euc-kr"));
+						else if(fileItem.getFieldName().equals("prodDetail")) 
+							product.setProdDetail(fileItem.getString("euc-kr"));
+						else if(fileItem.getFieldName().equals("price")) 
+							product.setPrice(Integer.parseInt(fileItem.getString("euc-kr")));
+						
+					}else {
+						
+						if(fileItem.getSize() > 0) {
+							int idx = fileItem.getName().lastIndexOf("\\");
+							
+							if(idx == -1) {
+								idx = fileItem.getName().lastIndexOf("/");
+							}
+							String fileName = fileItem.getName().substring(idx + 1);
+							product.setFileName(fileName);
+							try {
+								File uploadedFile = new File(temDir,fileName);
+								fileItem.write(uploadedFile);
+							}catch(IOException e) {
+								System.out.println(e);
+							}
+						}else {
+							product.setFileName("../../images/empty.GIF");
+						}
+					}//else
+				}//for
+				
+				productService.addProduct(product);
+				
+				request.setAttribute("product", product);
+				model.addAttribute("product", product);
+				
+			}else {
+				int overSize = (request.getContentLength() / 1000000);
+				System.out.println("<script>alert('파일의 크기는 1MB까지 입니다. 올리신 파일 용량은" + overSize + "MB입니다');");
+				System.out.println("history.back(); </script>");
+			}
+		}else {
+			System.out.println("인코딩 타입이 multipart/form-data가 아닙니다.");
+		}
+		
+		//사진 업로드시 리턴 위치. 이걸 어떻게..?
+//		return "forward:/product/getProduct.jsp";
+		
 		System.out.println("/product/addProduct : POST");
 		//Business Logic
-		productService.addProduct(product);
+//		productService.addProduct(product);
 		
 		//담긴 정보를 넘기기위해서 redirect에서 forward로 변경
 		return "forward:/product/addProduct.jsp";
